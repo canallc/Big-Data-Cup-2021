@@ -1,0 +1,52 @@
+---
+title: "BDC_Analysis"
+author: "Lucia Darrow"
+date: "2/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(tidyverse)
+library(data.table)
+library(magrittr)
+library(ggplot2)
+library(visdat)
+```
+
+```{r readData}
+# Read in the hackathon dataset
+BDC_womens <- fread("../data/BDC_hackathon_womens.csv")
+
+```
+
+
+```{r exploreData}
+# Check out the structure of the data
+str(BDC_womens)
+glimpse(BDC_womens)
+
+# How many teams are there?
+unique(BDC_womens$Home.Team)
+unique(BDC_womens$Away.Team)
+
+# Are there missing values in the dataset? If so, where are they and do we need to address them?
+vis_dat(BDC_womens)
+# It looks like the NA values occur on the x,y coordinates when a second player is not involved in the action
+
+# The V1 column doesn't provide any additional information. How do we remove it?
+
+# Are there any outliers or data entry errors in the dataset?
+
+# What are the possible values for the fields: Event, Detail.1 - Detail.4, and how are they related?
+
+# The game_date is currently a chr value. Should this be a date-time object? How would we convert it?
+
+# The clock is currently a chr value. Should this be a date-time object?
+
+
+```
+
