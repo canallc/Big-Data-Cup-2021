@@ -50,3 +50,35 @@ vis_dat(BDC_womens)
 
 ```
 
+```{r plots}
+
+# Let's plot the data on the rink, recalling this is from the perspective of the eventing team
+# All data
+BDC_womens %>%
+ggplot(aes(x = X.Coordinate, y = Y.Coordinate)) +
+  labs(title = "") +
+  geom_point(alpha = 0.1, size = 0.2) +
+  xlim(0, 200) + ylim(0, 85) +
+  geom_density_2d_filled(alpha = 0.35, show.legend = FALSE) +
+  theme_void()
+
+# Location of eventing team in dump in/out scenario
+BDC_womens %>% filter(Event == "Dump In/Out") %>%
+ggplot(aes(x = X.Coordinate, y = Y.Coordinate)) +
+  labs(title = "") +
+  geom_point(alpha = 0.1, size = 0.2) +
+  xlim(0, 200) + ylim(0, 85) +
+  geom_density_2d_filled(alpha = 0.35, show.legend = FALSE) +
+  theme_void()
+
+# Location of eventing team in shot scenario
+BDC_womens %>% filter(Event == "Shot") %>%
+ggplot(aes(x = X.Coordinate, y = Y.Coordinate)) +
+  labs(title = "") +
+  geom_point(alpha = 0.1, size = 0.2) +
+  xlim(0, 200) + ylim(0, 85) +
+  geom_density_2d_filled(alpha = 0.35, show.legend = FALSE) +
+  theme_void()
+```
+
+
