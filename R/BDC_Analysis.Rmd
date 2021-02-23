@@ -15,6 +15,7 @@ library(data.table)
 library(magrittr)
 library(ggplot2)
 library(visdat)
+library(dlookr)
 ```
 
 ```{r readData}
@@ -23,6 +24,11 @@ BDC_womens <- fread("../data/BDC_hackathon_womens.csv")
 
 ```
 
+```{r Passing Strategy}
+
+BDC_womens %<>% mutate(Intercepted = ifelse(IsPass == "Yes" & lead(Detail.1) == "Lost", "Yes", "No")) 
+
+```
 
 ```{r exploreData}
 # Check out the structure of the data
