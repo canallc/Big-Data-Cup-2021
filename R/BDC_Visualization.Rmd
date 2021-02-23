@@ -21,6 +21,15 @@ library(visdat)
 ```{r readData}
 # Read in the hackathon dataset
 BDC_womens <- fread("../data/BDC_hackathon_womens.csv")
+BDC_pass <- fread("../data/BDC_womens_PassStrategy.csv")
+
+```
+
+```{r}
+BDC_womens %>% 
+  mutate(absXdist = abs(X.Coordinate.2 - X.Coordinate),
+         absYdist = abs(Y.Coordinate.2 - Y.Coordinate), 
+         strategy = ifelse(absYdist > absXdist, "EW", "NS")) -> BDC_womens_new
 
 ```
 
@@ -262,5 +271,20 @@ BDC_womens$X.Coordinate.Plot <- BDC_womens$X.Coordinate - 100
 BDC_womens$Y.Coordinate.Plot <- BDC_womens$Y.Coordinate - 42.5
 
 nhl_rink_plot() + geom_point(BDC_womens, mapping = aes(x = X.Coordinate.Plot, y = Y.Coordinate.Plot), alpha = 0.1) + theme_void()
+
+# Play, Incomplete Play
+BDC_pass_filter <- BDC_pass %>% filter(Event %in% c("Play", "Incomplete Play")) 
+  
+BDC_pass_filter$X.Coordinate.Plot <- BDC_pass_filter$X.Coordinate - 100
+BDC_pass_filter$X.Coordinate.Plot2 <- BDC_pass_filter$X.Coordinate.2 - 100
+
+# 0 - 85
+# -42.5 - 42.5
+BDC_pass_filter$Y.Coordinate.Plot <- BDC_pass_filter$Y.Coordinate - 42.5
+BDC_pass_filter$Y.Coordinate.Plot2 <- BDC_pass_filter$Y.Coordinate.2 - 42.5
+
+nhl_rink_plot() + geom_point(BDC_pass_filter, mapping = aes(x = X.Coordinate.Plot, y = Y.Coordinate.Plot, fill = "green"), alpha = 0.1)  +
+  geom_point(BDC_pass_filter, mapping = aes(x = X.Coordinate.Plot2, y = Y.Coordinate.Plot2), alpha = 0.1, color = "red") + theme_void()
+
 
 ```
