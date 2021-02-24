@@ -16,6 +16,11 @@ library(magrittr)
 library(ggplot2)
 library(visdat)
 library(dlookr)
+library(cluster) 
+library(mclust)
+library(flextable)
+library(officer)
+library(formattable)
 ```
 
 ```{r readData}
@@ -24,11 +29,6 @@ BDC_womens <- fread("../data/BDC_hackathon_womens.csv")
 
 ```
 
-```{r Passing Strategy}
-
-BDC_womens %<>% mutate(Intercepted = ifelse(IsPass == "Yes" & lead(Detail.1) == "Lost", "Yes", "No")) 
-
-```
 
 ```{r exploreData}
 # Check out the structure of the data
@@ -86,5 +86,98 @@ ggplot(aes(x = X.Coordinate, y = Y.Coordinate)) +
   geom_density_2d_filled(alpha = 0.35, show.legend = FALSE) +
   theme_void()
 ```
+```{r Passing Strategy Data Update}
 
+BDC_womens %>% 
+  mutate(absXdist = abs(X.Coordinate.2 - X.Coordinate),
+         absYdist = abs(Y.Coordinate.2 - Y.Coordinate), 
+         `Passing Strategy` = ifelse(absYdist > absXdist, "EW", "NS"),
+          Intercepted = ifelse(IsPass == "Yes" & lead(Event) == "Takeaway" & Event == "Incomplete Play", "Yes", "No")
+         ) -> BDC_womens_passing
+
+```
+
+
+```{r K-Means Clustering}
+
+BDC_womens_PassStrategy_KM <- BDC_womens_passing %>% mutate(
+  `Passing Strategy` = ifelse(`Passing Strategy` == "NS", 10, 0), 
+  Intercepted = ifelse(Intercepted == "Yes", 1, 0)) %>% 
+  filter(IsPass == "Yes")
+
+
+BDC_KM <- BDC_womens_PassStrategy_KM %>% select(Home.Team.Goals, Away.Team.Goals)
+
+BDC_KM <- scale(BDC_KM)
+
+fit <- kmeans(BDC_KM, 3)
+
+BDC_womens_PassStrategy_KM <- data.frame(BDC_womens_PassStrategy_KM, fit$cluster)
+
+clusplot(BDC_KM, fit$cluster, color=TRUE, shade=FALSE, 
+  	labels=2, lines=0, cex.txt = .5,col.clus = c("red", "green", "blue"),col.txt = c("black", "black"))
+
+BDC_womens_PassStrategy_KM_DT <- BDC_womens_PassStrategy_KM %>% 
+  group_by(fit.cluster) %>% 
+  summarise(N = n(), 
+            `Goals Home` = digits(mean(Home.Team.Goals),2), 
+            `Goals Away` = digits(mean(Away.Team.Goals),2), 
+            `Home Skaters` = digits(mean(Home.Team.Skaters),1), 
+            `Away Skaters` = digits(mean(Away.Team.Skaters),1), 
+            `Mean Passing Strategy` = digits(mean(Passing.Strategy),1), 
+            `Percent Intercepted` = digits(sum(Intercepted)/n(),1)
+            )
+
+BDC_womens_PassStrategy_KM_DT %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+BDC_womens_PassStrategy_KM_DT_Game <- BDC_womens_PassStrategy_KM %>% 
+  group_by(fit.cluster, game_date) %>% 
+  summarise(N = n(), `Goals Home` = max(Home.Team.Goals), `Goals Away` = max(Away.Team.Goals), `Home Skaters` = mean(Home.Team.Skaters), `Away Skaters` = mean(Away.Team.Skaters), `Mean Passing Strategy` = mean(Passing.Strategy), `Percent Intercepted` = sum(Intercepted)/n())
+
+BDC_womens_PassStrategy_KM_DT_Game %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+BDC_womens_PassStrategy_KM_DT_Game_Team <- BDC_womens_PassStrategy_KM %>% 
+  group_by(fit.cluster, game_date, Home.Team, Away.Team) %>% 
+  summarise(N = n(), `Goals Home` = max(Home.Team.Goals), `Goals Away` = max(Away.Team.Goals), `Home Skaters` = mean(Home.Team.Skaters), `Away Skaters` = mean(Away.Team.Skaters), `Mean Passing Strategy` = mean(Passing.Strategy), `Percent Intercepted` = sum(Intercepted)/n())
+
+BDC_womens_PassStrategy_KM_DT_Game_Team %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+
+```
 
