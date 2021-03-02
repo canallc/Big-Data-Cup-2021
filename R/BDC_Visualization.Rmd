@@ -15,8 +15,50 @@ library(data.table)
 library(magrittr)
 library(ggplot2)
 library(visdat)
+
+library(ggforce)
+library(ggtext)
+library(gganimate)
+library(extrafont)
+library(showtext)
+library(magick)
 ```
 
+```{r font}
+# Process to add new fonts
+# font_add_google("Ultra", "Ultra")
+# font_add_google("Roboto", "Roboto")
+# font_add_google("Alfa Slab One", "Alfa Slab One")
+# font_add_google("Open Sans Condensed", "Open Sans Condensed", regular.wt = 300)
+# 
+# # Load font from the current search path into showtext
+# 
+# # Check the current search path for fonts
+# font_paths()    
+# #> [1] "C:\\Windows\\Fonts"
+# 
+# # List available font files in the search path
+# font_files()    
+# #>   [1] "AcadEref.ttf"                                
+# #>   [2] "AGENCYB.TTF"                           
+# #> [428] "pala.ttf"                                    
+# #> [429] "palab.ttf"                                   
+# #> [430] "palabi.ttf"                                  
+# #> [431] "palai.ttf"
+# 
+# # syntax: font_add(family = "<family_name>", regular = "/path/to/font/file")
+# fontsView <- font_files()
+# font_add("OpenSans", "OpenSans-Regular.ttf")
+# font_add("Roboto", "RobotoCondensed-Regular.ttf")
+# 
+# font_families()
+# #> [1] "sans"         "serif"        "mono"         "wqy-microhei"
+# #> [5] "Montserrat"   "Roboto"       "Palatino"
+# 
+# ## automatically use showtext for new devices
+showtext_auto()
+
+```
 
 ```{r readData}
 # Read in the hackathon dataset
@@ -26,10 +68,10 @@ BDC_pass <- fread("../data/BDC_womens_PassStrategy.csv")
 ```
 
 ```{r}
-BDC_womens %>% 
+BDC_womens %<>% 
   mutate(absXdist = abs(X.Coordinate.2 - X.Coordinate),
          absYdist = abs(Y.Coordinate.2 - Y.Coordinate), 
-         strategy = ifelse(absYdist > absXdist, "EW", "NS")) -> BDC_womens_new
+         strategy = ifelse(absYdist > absXdist, "EW", "NS")) 
 
 ```
 
@@ -288,3 +330,62 @@ nhl_rink_plot() + geom_point(BDC_pass_filter, mapping = aes(x = X.Coordinate.Plo
 
 
 ```
+
+```{r}
+
+# Create a filter to test out different views of the data
+# BDC_pass_plot <- BDC_pass_filter %>% filter(game_date == "2/12/2019")
+# BDC_pass_plot <- BDC_pass_filter %>% filter(Player.2 == "Hilary Knight")
+BDC_pass_plot <- BDC_pass_filter %>% filter(game_date == "2/12/2019", Team == "Olympic (Women) - Canada", Period == 3)
+
+# Prepare the data for plotting
+BDC_pass_plot$Team %<>% as.factor()
+BDC_pass_plot %<>% 
+  select(x = X.Coordinate.Plot, y = Y.Coordinate.Plot, xend = X.Coordinate.Plot2, yend = Y.Coordinate.Plot2, `Passing Strategy`, Team, Clock, Event)
+
+
+# Create the plot
+hockey_plot <- nhl_rink_plot() + 
+  geom_link(BDC_pass_plot, mapping = aes(x = x, y = y, xend = xend, yend = yend, colour = `Passing Strategy`, alpha = stat(index), size = stat(index)), lineend = 'round') +
+  geom_link(filter(BDC_pass_plot, Event == "Incomplete Play"), mapping = aes(x = x, y = y, xend = xend, yend = yend, alpha = stat(index), size = stat(index)), color = "black", lineend = 'round') +
+  scale_size_continuous(range=c(0.1,2)) +
+  scale_alpha_continuous(range = c(0.1, 0.3)) + 
+  theme_void() +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank())  +
+  theme(
+    plot.background = element_rect(fill = "white", colour = "black", size = 1),
+    text = element_text(color = "#6F857E", size = 20),
+    panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    plot.margin = unit(c(10, 2, 10, 2), units = "mm"),
+    legend.position="bottom",
+    legend.title = element_text(face = "bold"),
+    plot.title = element_text(size = 80, face = "bold", family = "Alfa Slab One", color = "#001B2E", lineheight=.3),
+    plot.subtitle = element_text(size = 40, family ="Open Sans Condensed", lineheight=.5),
+    plot.caption = element_text(lineheight=.2)
+  )  +
+  labs(
+    x = "",
+    y = "",
+    title = "Passing Strategy",
+    subtitle = "North-South vs East-West Strategy",
+    caption = "Graphic created by CANA Advisors \n 
+               Data sourced from Stathletes Big Data Cup Challenge"
+  ) 
+
+# Show the plot in R
+hockey_plot
+
+
+# Change the filename here to save specific versions
+ggsave(filename = "hockey_plot.png", 
+       plot = hockey_plot, 
+       device = "png",
+       type = "cairo",
+       width = 8, height = 8)
+```
+
+
