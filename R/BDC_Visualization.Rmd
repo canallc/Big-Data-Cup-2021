@@ -71,7 +71,10 @@ BDC_pass <- fread("../data/BDC_womens_PassStrategy.csv")
 BDC_womens %<>% 
   mutate(absXdist = abs(X.Coordinate.2 - X.Coordinate),
          absYdist = abs(Y.Coordinate.2 - Y.Coordinate), 
-         strategy = ifelse(absYdist > absXdist, "EW", "NS")) 
+         opp = absXdist,
+         hyp = sqrt(absXdist^2 + absYdist^2),
+         angle = asin(opp/hyp),
+         strategy = ifelse(absYdist > absXdist, "NS", "EW")) 
 
 ```
 
@@ -315,7 +318,7 @@ BDC_womens$Y.Coordinate.Plot <- BDC_womens$Y.Coordinate - 42.5
 nhl_rink_plot() + geom_point(BDC_womens, mapping = aes(x = X.Coordinate.Plot, y = Y.Coordinate.Plot), alpha = 0.1) + theme_void()
 
 # Play, Incomplete Play
-BDC_pass_filter <- BDC_pass %>% filter(Event %in% c("Play", "Incomplete Play")) 
+BDC_pass_filter <- BDC_womens %>% filter(Event %in% c("Play", "Incomplete Play")) 
   
 BDC_pass_filter$X.Coordinate.Plot <- BDC_pass_filter$X.Coordinate - 100
 BDC_pass_filter$X.Coordinate.Plot2 <- BDC_pass_filter$X.Coordinate.2 - 100
@@ -341,40 +344,46 @@ BDC_pass_plot <- BDC_pass_filter %>% filter(game_date == "2/12/2019", Team == "O
 # Prepare the data for plotting
 BDC_pass_plot$Team %<>% as.factor()
 BDC_pass_plot %<>% 
-  select(x = X.Coordinate.Plot, y = Y.Coordinate.Plot, xend = X.Coordinate.Plot2, yend = Y.Coordinate.Plot2, `Passing Strategy`, Team, Clock, Event)
+  select(x = X.Coordinate.Plot, y = Y.Coordinate.Plot, xend = X.Coordinate.Plot2, yend = Y.Coordinate.Plot2, `Passing Strategy`, Team, Clock, Event, angle)
 
 
 # Create the plot
 hockey_plot <- nhl_rink_plot() + 
-  geom_link(BDC_pass_plot, mapping = aes(x = x, y = y, xend = xend, yend = yend, colour = `Passing Strategy`, alpha = stat(index), size = stat(index)), lineend = 'round') +
-  geom_link(filter(BDC_pass_plot, Event == "Incomplete Play"), mapping = aes(x = x, y = y, xend = xend, yend = yend, alpha = stat(index), size = stat(index)), color = "black", lineend = 'round') +
+  geom_link(BDC_pass_plot, mapping = aes(x = x, y = y, xend = xend, yend = yend, colour = angle, alpha = stat(index), size = stat(index)), lineend = 'round') +
+ scale_color_gradient(low="#6DB6FF", high="#004949") +
+  # geom_link(filter(BDC_pass_plot, Event == "Incomplete Play"), mapping = aes(x = x, y = y, xend = xend, yend = yend, alpha = stat(index), size = stat(index)), color = "black", lineend = 'round') +
   scale_size_continuous(range=c(0.1,2)) +
   scale_alpha_continuous(range = c(0.1, 0.3)) + 
   theme_void() +
   theme(axis.title.y=element_blank(),
         axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())  +
-  theme(
-    plot.background = element_rect(fill = "white", colour = "black", size = 1),
-    text = element_text(color = "#6F857E", size = 20),
-    panel.grid = element_blank(),
-    axis.text.x = element_blank(),
-    axis.text.y = element_blank(),
-    plot.margin = unit(c(10, 2, 10, 2), units = "mm"),
-    legend.position="bottom",
-    legend.title = element_text(face = "bold"),
-    plot.title = element_text(size = 80, face = "bold", family = "Alfa Slab One", color = "#001B2E", lineheight=.3),
-    plot.subtitle = element_text(size = 40, family ="Open Sans Condensed", lineheight=.5),
-    plot.caption = element_text(lineheight=.2)
-  )  +
-  labs(
-    x = "",
-    y = "",
-    title = "Passing Strategy",
-    subtitle = "North-South vs East-West Strategy",
-    caption = "Graphic created by CANA Advisors \n 
-               Data sourced from Stathletes Big Data Cup Challenge"
-  ) 
+        axis.ticks.y=element_blank()) + 
+  guides(size=FALSE) + 
+  labs(color = "Pass Angle")
+
+# Optional article style formatting
+# +
+#   theme(
+#     plot.background = element_rect(fill = "white", colour = "black", size = 1),
+#     text = element_text(color = "#6F857E", size = 20),
+#     panel.grid = element_blank(),
+#     axis.text.x = element_blank(),
+#     axis.text.y = element_blank(),
+#     plot.margin = unit(c(10, 2, 10, 2), units = "mm"),
+#     legend.position="bottom",
+#     legend.title = element_text(face = "bold"),
+#     plot.title = element_text(size = 80, face = "bold", family = "Alfa Slab One", color = "#001B2E", lineheight=.3),
+#     plot.subtitle = element_text(size = 40, family ="Open Sans Condensed", lineheight=.5),
+#     plot.caption = element_text(lineheight=.2)
+#   )  +
+#   labs(
+#     x = "",
+#     y = "",
+#     title = "Passing Strategy",
+#     subtitle = "North-South vs East-West Strategy",
+#     caption = "Graphic created by CANA Advisors \n 
+#                Data sourced from Stathletes Big Data Cup Challenge"
+#   ) 
 
 # Show the plot in R
 hockey_plot
