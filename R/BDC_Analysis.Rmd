@@ -16,6 +16,12 @@ library(magrittr)
 library(ggplot2)
 library(visdat)
 library(dlookr)
+library(cluster) 
+library(mclust)
+library(flextable)
+library(officer)
+library(formattable)
+library(chron)
 ```
 
 ```{r readData}
@@ -24,11 +30,6 @@ BDC_womens <- fread("../data/BDC_hackathon_womens.csv")
 
 ```
 
-```{r Passing Strategy}
-
-BDC_womens %<>% mutate(Intercepted = ifelse(IsPass == "Yes" & lead(Detail.1) == "Lost", "Yes", "No")) 
-
-```
 
 ```{r exploreData}
 # Check out the structure of the data
@@ -87,4 +88,241 @@ ggplot(aes(x = X.Coordinate, y = Y.Coordinate)) +
   theme_void()
 ```
 
+```{r Passing Strategy Data Update}
+
+BDC_womens %>% 
+  mutate(absXdist = abs(X.Coordinate.2 - X.Coordinate),
+         absYdist = abs(Y.Coordinate.2 - Y.Coordinate), 
+         `Passing Strategy` = ifelse(absYdist > absXdist, "EW", "NS"),
+          Intercepted = ifelse(IsPass == "Yes" & lead(Event) == "Takeaway" & Event == "Incomplete Play", "Yes", "No")
+         ) -> BDC_womens_passing
+
+BDC_womens_passing %<>% 
+  mutate(absXdist = abs(X.Coordinate.2 - X.Coordinate),
+         absYdist = abs(Y.Coordinate.2 - Y.Coordinate), 
+         opp = absXdist,
+         hyp = sqrt(absXdist^2 + absYdist^2),
+         angle = asin(opp/hyp),
+         hyp_angle = hyp * angle,
+         strategy = ifelse(absYdist > absXdist, "EW", "NS"))
+
+
+```
+
+
+```{r K-Means Clustering}
+
+BDC_womens_PassStrategy_KM <- BDC_womens_passing %>% 
+  filter(IsPass == "Yes") %>% 
+  mutate(
+  `Passing Strategy` = ifelse(`Passing Strategy` == "NS", 10, 0), 
+  Intercepted = ifelse(Intercepted == "Yes", 1, 0),
+  Scoring_Diff = ifelse(Team == Home.Team, Home.Team.Goals - Away.Team.Goals, Away.Team.Goals - Home.Team.Goals),
+  Clock = lubridate::ms(Clock)
+  )
+
+BDC_KM <- BDC_womens_PassStrategy_KM %>% select(Home.Team.Goals, Away.Team.Goals, Home.Team.Skaters, Away.Team.Skaters)
+
+BDC_KM <- scale(BDC_KM)
+
+fit <- kmeans(BDC_KM, 3)
+
+BDC_womens_PassStrategy_KM <- data.frame(BDC_womens_PassStrategy_KM, fit$cluster)
+
+clusplot(BDC_KM, fit$cluster, color=TRUE, shade=FALSE, 
+  	labels=2, lines=0, cex.txt = .5,col.clus = c("red", "green", "blue"),col.txt = c("black", "black"))
+
+BDC_womens_PassStrategy_KM_DT <- BDC_womens_PassStrategy_KM %>% 
+  group_by(fit.cluster) %>% 
+  summarise(N = n(), 
+            `Goals Home` = digits(mean(Home.Team.Goals),2), 
+            `Goals Away` = digits(mean(Away.Team.Goals),2), 
+            `Home Skaters` = digits(mean(Home.Team.Skaters),2), 
+            `Away Skaters` = digits(mean(Away.Team.Skaters),2), 
+            `Mean Passing Strategy` = digits(mean(Passing.Strategy),2), 
+            `Mean Passing Angle` = digits(mean(angle, na.rm = TRUE),3),
+            `Mean Passing Hyp_Angle` = digits(mean(hyp_angle, na.rm = TRUE),3),
+            `Percent Intercepted` = percent(sum(Intercepted)/n(),1)
+            )
+
+BDC_womens_PassStrategy_KM_DT %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+BDC_womens_PassStrategy_KM_DT_Game <- BDC_womens_PassStrategy_KM %>% 
+  group_by(fit.cluster, game_date) %>% 
+  summarise(N = n(), `Goals Home` = max(Home.Team.Goals), `Goals Away` = max(Away.Team.Goals), `Home Skaters` = mean(Home.Team.Skaters), `Away Skaters` = mean(Away.Team.Skaters), `Mean Passing Strategy` = mean(Passing.Strategy), `Percent Intercepted` = sum(Intercepted)/n())
+
+BDC_womens_PassStrategy_KM_DT_Game %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+BDC_womens_PassStrategy_KM_DT_Game_Team <- BDC_womens_PassStrategy_KM %>% 
+  group_by(fit.cluster, game_date, Home.Team, Away.Team) %>% 
+  summarise(N = n(), `Goals Home` = max(Home.Team.Goals), `Goals Away` = max(Away.Team.Goals), `Home Skaters` = mean(Home.Team.Skaters), `Away Skaters` = mean(Away.Team.Skaters), `Mean Passing Strategy` = mean(Passing.Strategy), `Percent Intercepted` = sum(Intercepted)/n())
+
+BDC_womens_PassStrategy_KM_DT_Game_Team %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+# USA
+
+BDC_KM <- BDC_womens_PassStrategy_KM %>% 
+  filter(Team == "Olympic (Women) - United States") %>% 
+  select(Scoring_Diff, Home.Team.Skaters, Away.Team.Skaters)
+
+BDC_KM <- scale(BDC_KM)
+
+fit <- kmeans(BDC_KM, 3)
+
+BDC_womens_PassStrategy_KM_USA <- BDC_womens_PassStrategy_KM %>% 
+  filter(Team == "Olympic (Women) - United States")
+
+BDC_womens_PassStrategy_KM_USA <- data.frame(BDC_womens_PassStrategy_KM_USA, fit$cluster)
+
+# clusplot(BDC_KM, fit$cluster, color=TRUE, shade=FALSE, 
+#  	labels=2, lines=0, cex.txt = .5,col.clus = c("red", "green", "blue"),col.txt = c("black", "black"))
+
+BDC_womens_PassStrategy_KM_DT_USA <- BDC_womens_PassStrategy_KM_USA %>% 
+  group_by(fit.cluster) %>% 
+  summarise(N = n(), 
+            `Scoring_Diff` = digits(mean(Scoring_Diff),2), 
+            `Home Skaters` = digits(mean(Home.Team.Skaters),2), 
+            `Away Skaters` = digits(mean(Away.Team.Skaters),2), 
+            # `Mean Passing Strategy` = digits(mean(Passing.Strategy),2), 
+            # `Mean Passing Angle` = digits(mean(angle, na.rm = TRUE),3),
+            `Mean Passing Hyp_Angle` = digits(mean(hyp_angle, na.rm = TRUE),2),
+            `Standard Dev Passing Hyp_Angle` = digits(sd(hyp_angle, na.rm = TRUE),2),
+            `Percent Intercepted` = percent(sum(Intercepted)/n(),1)
+            )
+
+BDC_womens_PassStrategy_KM_DT_USA %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+
+#Canada
+
+BDC_KM <- BDC_womens_PassStrategy_KM %>% 
+  filter(Team == "Olympic (Women) - Canada") %>% 
+  select(Scoring_Diff, Home.Team.Skaters, Away.Team.Skaters)
+
+BDC_KM <- scale(BDC_KM)
+
+fit <- kmeans(BDC_KM, 3)
+
+BDC_womens_PassStrategy_KM_Canada <- BDC_womens_PassStrategy_KM %>% 
+  filter(Team == "Olympic (Women) - Canada")
+
+BDC_womens_PassStrategy_KM_Canada <- data.frame(BDC_womens_PassStrategy_KM_Canada, fit$cluster)
+
+# clusplot(BDC_KM, fit$cluster, color=TRUE, shade=FALSE, 
+#  	labels=2, lines=0, cex.txt = .5,col.clus = c("red", "green", "blue"),col.txt = c("black", "black"))
+
+BDC_womens_PassStrategy_KM_DT_Canada <- BDC_womens_PassStrategy_KM_Canada %>% 
+  group_by(fit.cluster) %>% 
+  summarise(N = n(), 
+            `Scoring_Diff` = digits(mean(Scoring_Diff),2), 
+            `Home Skaters` = digits(mean(Home.Team.Skaters),2), 
+            `Away Skaters` = digits(mean(Away.Team.Skaters),2), 
+            # `Mean Passing Strategy` = digits(mean(Passing.Strategy),2), 
+            # `Mean Passing Angle` = digits(mean(angle, na.rm = TRUE),3),
+            `Mean Passing Hyp_Angle` = digits(mean(hyp_angle, na.rm = TRUE),2),
+            `Standard Dev Passing Hyp_Angle` = digits(sd(hyp_angle, na.rm = TRUE),2),
+            `Percent Intercepted` = percent(sum(Intercepted)/n(),1)
+            )
+
+BDC_womens_PassStrategy_KM_DT_Canada %>% 
+  flextable() %>%
+#  colformat_num(digits = 1) %>% 
+  bold(part = "header") %>% 
+#  align(align = "center", part = "header" ) %>% 
+  fontsize(size = 12, part = "all") %>% 
+  rotate(rotation = "tbrl", align = "center", part = "header") %>% 
+  align(align = "right", part = "header") %>% 
+  valign(valign = "center", part = "header") %>% 
+  align(align = "center", part = "body") %>% 
+  set_table_properties(width = .2, layout = "autofit") %>% 
+#  autofit() %>% 
+  height(height = 1.5, part = "header")
+
+
+```
+
+```{r Chart}
+
+BDC_womens_PassStrategy_KM %>% group_by( GameTime = lubridate::minute(Clock),Team,Period,Scoring_Diff) %>% summarise(Passing = mean(`Passing.Strategy`)) %>% ggplot(aes(x=GameTime,y=Passing)) + geom_point() + facet_grid(rows = vars(Period))
+
+BDC_womens_PassStrategy_KM %>% group_by(Team,Period,Scoring_Diff) %>% summarise(Passing = mean(`Passing.Strategy`)) %>% ggplot(aes(x=Period,y=Passing, colour = Team)) + geom_point() + facet_grid(cols = vars(Scoring_Diff)) + theme(legend.position = "right",legend.text = element_text(size = 6)) + scale_y_continuous(limits = c(0,10))
+
+BDC_womens_PassStrategy_KM %>% group_by( GameTime = lubridate::minute(Clock),Team,Period,Scoring_Diff) %>% summarise(Passing = mean(hyp_angle)) %>% ggplot(aes(x=GameTime,y=Passing)) + geom_point() + facet_grid(rows = vars(Period))
+
+BDC_womens_PassStrategy_KM %>% 
+  group_by(Team,Period,Scoring_Diff) %>% 
+  summarise(Passing = mean(hyp_angle, na.rm = TRUE)) %>% 
+  ggplot(aes(x=Period,y=Passing, colour = Team)) + 
+  geom_point() + facet_grid(cols = vars(Scoring_Diff)) + 
+  theme(legend.position = "right",legend.text = element_text(size = 4)) +
+          scale_y_continuous(limits = c(0,60))
+
+
+BDC_womens_PassStrategy_KM %>% group_by( GameTime = lubridate::minute(Clock),Team,Period,Scoring_Diff) %>% summarise(Passing = mean(`Passing.Strategy`)) %>% ggplot(aes(x=GameTime,y=Passing, colour = Team)) + geom_point() + facet_grid(rows = vars(Period))
+
+BDC_womens_PassStrategy_KM %>% 
+  filter(Team %in% c("Olympic (Women) - Canada", "Olympic (Women) - United States")) %>% 
+  group_by(Team,Scoring_Diff,Period) %>% summarise(Passing = mean(hyp_angle, na.rm = TRUE)) %>%
+  ggplot(aes(x=Period,y=Passing, colour = Team)) + 
+          geom_point() + 
+          facet_grid(cols = vars(Scoring_Diff)) + 
+          theme(legend.position = "right",legend.text = element_text(size = 4)) +
+          scale_y_continuous(limits = c(0,60))
+
+BDC_womens_PassStrategy_KM %>% 
+  filter(Team %in% c("Olympic (Women) - Canada", "Olympic (Women) - United States")) %>% 
+  group_by(Period,Team,Scoring_Diff,GameTime = lubridate::minute(Clock)) %>% summarise(Passing = mean(hyp_angle, na.rm = TRUE)) %>% 
+  ggplot(aes(x=GameTime,y=Passing, colour = Team)) + 
+  geom_point() + 
+  facet_grid(rows = vars(Period))
+
+```
 
